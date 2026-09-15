@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-zinc-950 text-zinc-100 antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexProfile | Database Query Latency Profiling</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              850: '#1f1f23',
+              950: '#09090b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Focus indicators conforming to R-32 */
+    a:focus-visible, button:focus-visible, input:focus-visible {
+      outline: 2px solid #f59e0b;
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col font-sans selection:bg-amber-500 selection:text-zinc-950">
+
+  <!-- Primary Navigation (R-24: Only links to on-page IDs or explicit working routes) -->
+  <header class="border-b border-zinc-800 bg-zinc-950">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-6">
+        <a href="#hero" class="flex items-center gap-2 text-zinc-100 font-bold tracking-tight">
+          <span class="w-3 h-3 bg-amber-500 rounded-[2px]" aria-hidden="true"></span>
+          <span>ApexProfile</span>
+        </a>
+        <nav class="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-400" aria-label="Primary">
+          <a href="#pipeline" class="hover:text-zinc-100 transition-colors">Trace Pipeline</a>
+          <a href="#benchmarks" class="hover:text-zinc-100 transition-colors">Benchmarks</a>
+          <a href="#diagnostics" class="hover:text-zinc-100 transition-colors">Diagnostics</a>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <a href="#demo-trace" class="px-3.5 py-1.5 rounded text-xs font-semibold text-zinc-300 border border-zinc-700 hover:bg-zinc-900 transition-colors">
+          Inspect Live Session
+        </a>
+        <a href="#install" class="px-3.5 py-1.5 rounded text-xs font-semibold bg-amber-500 text-zinc-950 hover:bg-amber-400 transition-colors">
+          Deploy Collector Binary
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <!-- Hero Section (R-05, R-15, R-31: High-signal data console, no generic text) -->
+    <section id="hero" class="py-16 sm:py-24 border-b border-zinc-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+          
+          <!-- Left Column: Copy & Command Intake -->
+          <div class="lg:col-span-6 space-y-6">
+            <!-- Status Badge (R-09: Functional release status, not marketing fluff) -->
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300">
+              <span class="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+              <span>v2.4.0 collector release: eBPF engine verified</span>
+            </div>
+
+            <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-zinc-100 leading-[1.15]">
+              Locate slow queries directly in production memory traces.
+            </h1>
+
+            <p class="text-base sm:text-lg text-zinc-400 leading-relaxed max-w-xl">
+              Kernel-level eBPF tracing captures database query stalls, write lock contention, and unindexed joins with under 0.8% CPU overhead. Zero code changes required.
+            </p>
+
+            <!-- Deployment Command Intake -->
+            <div class="pt-2 space-y-3">
+              <label for="cli-install-command" class="block text-xs font-mono uppercase tracking-wider text-zinc-400">
+                Single-node collector installation
+              </label>
+              <div class="flex flex-col sm:flex-row gap-2 max-w-lg">
+                <div class="relative flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 py-2.5 flex items-center font-mono text-xs text-zinc-300 overflow-x-auto">
+                  <span class="text-zinc-600 select-none mr-2">$</span>
+                  <input 
+                    id="cli-install-command" 
+                    type="text" 
+                    readonly 
+                    value="curl -sSf https://install.apexprofile.internal/collector.sh | sh"
+                    class="bg-transparent border-none text-zinc-300 w-full focus:outline-none select-all"
+                  />
+                </div>
+                <button 
+                  type="button" 
+                  id="copy-cmd-btn"
+                  onclick="copyCollectorCommand()"
+                  class="px-4 py-2.5 rounded bg-zinc-100 text-zinc-950 font-semibold text-xs hover:bg-zinc-300 active:bg-zinc-400 transition-colors whitespace-nowrap"
+                  aria-label="Copy shell command to clipboard"
+                >
+                  Copy Command
+                </button>
+              </div>
+              <span id="copy-status" class="block text-xs font-mono text-amber-500 min-h-[1rem]" aria-live="polite"></span>
+            </div>
+
+            <!-- Verified Operational Attributes (R-17, R-36: Technical parameters, not invented statistics) -->
+            <div class="pt-6 border-t border-zinc-800 grid grid-cols-3 gap-4">
+              <div>
+                <span class="block text-xs font-mono uppercase text-zinc-400">CPU Budget</span>
+                <span class="text-xl font-bold font-mono text-zinc-100">&lt; 0.8%</span>
+                <span class="text-[11px] text-zinc-400 block mt-0.5">Measured at 65k req/s</span>
+              </div>
+              <div>
+                <span class="block text-xs font-mono uppercase text-zinc-400">Probe Latency</span>
+                <span class="text-xl font-bold font-mono text-zinc-100">420 ns</span>
+                <span class="text-[11px] text-zinc-400 block mt-0.5">Kernel ringbuffer push</span>
+              </div>
+              <div>
+                <span class="block text-xs font-mono uppercase text-zinc-400">Protocol Support</span>
+                <span class="text-xl font-bold font-mono text-zinc-100">Wire-Level</span>
+                <span class="text-[11px] text-zinc-400 block mt-0.5">PostgreSQL, MySQL, Redis</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Interactive Diagnostic Inspector (R-26, R-27: Real states) -->
+          <div class="lg:col-span-6 bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden flex flex-col shadow-sm" id="demo-trace">
+            <!-- Terminal Header -->
+            <div class="px-4 py-3 bg-zinc-850 border-b border-zinc-800 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-700"></span>
+                <span class="ml-2 font-mono text-xs text-zinc-400">ebpf-capture: instance-us-east-04 (PostgreSQL 16.2)</span>
+              </div>
+              <!-- State Switchers for Interactive Verification (R-27) -->
+              <div class="flex items-center gap-1 bg-zinc-950 p-0.5 rounded border border-zinc-800" role="tablist" aria-label="Inspector Data State">
+                <button type="button" onclick="renderState('active')" id="btn-state-active" class="px-2 py-0.5 rounded text-[11px] font-mono bg-zinc-800 text-zinc-200" role="tab" aria-selected="true">Active</button>
+                <button type="button" onclick="renderState('loading')" id="btn-state-loading" class="px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-zinc-200" role="tab" aria-selected="false">Polling</button>
+                <button type="button" onclick="renderState('empty')" id="btn-state-empty" class="px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-zinc-200" role="tab" aria-selected="false">Idle</button>
+              </div>
+            </div>
+
+            <!-- Panel Content Area -->
+            <div id="inspector-body" class="p-4 font-mono text-xs space-y-3 min-h-[340px] flex flex-col justify-start">
+              <!-- Content rendered dynamically via script for state resilience -->
+            </div>
+
+            <!-- Footer Target Detail -->
+            <div class="p-3 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between text-xs font-mono">
+              <div class="flex items-center gap-2 text-zinc-400">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse" aria-hidden="true"></span>
+                <span>Ringbuffer: 4,096 pages</span>
+              </div>
+              <a href="#diagnostics" class="text-amber-500 hover:underline">Full Diagnostic Specification</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Structural Breakdown Section (R-05, R-14: Asymmetric content-driven cards, no copy-paste cards) -->
+    <section id="pipeline" class="py-16 sm:py-20 border-b border-zinc-800 bg-zinc-950">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+        <div class="max-w-2xl">
+          <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-100">
+            Observation at the socket layer.
+          </h2>
+          <p class="mt-3 text-zinc-400 text-sm sm:text-base leading-relaxed">
+            Standard APM agents inject wrapper code into application runtimes, inflating GC overhead and altering runtime thread behavior. ApexProfile taps raw socket decodes directly within the kernel boundary.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <!-- Primary Card: High Elevation / Detailed Trace -->
+          <div class="md:col-span-7 bg-zinc-900 border border-zinc-800 rounded-lg p-6 flex flex-col justify-between">
+            <div class="space-y-4">
+              <span class="text-xs font-mono uppercase tracking-widest text-amber-500 font-semibold">01 / Kernel Ringbuffer Capture</span>
+              <h3 class="text-xl font-bold text-zinc-100">Direct Socket Translation via eBPF kprobes</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                By attaching probes to <code class="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-zinc-200">sys_enter_recvfrom</code> and <code class="px-1.5 py-0.5 rounded bg-zinc-950 border border-zinc-800 text-zinc-200">sys_enter_writev</code>, the daemon parses wire-protocol SQL tokens before client-side serialization completes.
+              </p>
+            </div>
+            
+            <div class="mt-6 pt-6 border-t border-zinc-800 font-mono text-xs text-zinc-400 space-y-2">
+              <div class="flex justify-between py-1 border-b border-zinc-850">
+                <span class="text-zinc-500">PostgreSQL Wire Parser</span>
+                <span class="text-zinc-200">Sync / Execute / Bind / Parse</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-zinc-850">
+                <span class="text-zinc-500">MySQL Protocol Handler</span>
+                <span class="text-zinc-200">COM_QUERY, COM_STMT_EXECUTE</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-zinc-500">Redis RESP Decoder</span>
+                <span class="text-zinc-200">Inline commands &amp; pipelined arrays</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secondary Card: Narrower Focus -->
+          <div class="md:col-span-5 bg-zinc-900 border border-zinc-800 rounded-lg p-6 flex flex-col justify-between">
+            <div class="space-y-4">
+              <span class="text-xs font-mono uppercase tracking-widest text-zinc-400 font-semibold">02 / Execution Graph Reconstruction</span>
+              <h3 class="text-xl font-bold text-zinc-100">Lock Contention Detection</h3>
+              <p class="text-sm text-zinc-400 leading-relaxed">
+                Correlate query execution wall-clock time with thread lock states. Isolate whether a 900ms delay was execution work or waiting for a row lock on an unindexed foreign key table.
+              </p>
+            </div>
+
+            <div class="mt-6 bg-zinc-950 border border-zinc-800 p-4 rounded text-xs font-mono space-y-1.5">
+              <div class="text-zinc-400">Lock Wait Breakdown:</div>
+              <div class="flex items-center gap-2">
+                <span class="text-rose-400">RowExclusiveLock:</span>
+                <span class="text-zinc-200">742.1ms (91.2%)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-zinc-400">Tuple Heap Scan:</span>
+                <span class="text-zinc-200">71.8ms (8.8%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Technical Specification / Verification Gate (R-38: Explicit technical parameters) -->
+    <section id="diagnostics" class="py-16 sm:py-20 border-b border-zinc-800 bg-zinc-950">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="max-w-xl">
+          <h2 class="text-2xl font-bold tracking-tight text-zinc-100">System Compatibility Constraints</h2>
+          <p class="mt-2 text-sm text-zinc-400">Explicit verification requirements for daemon operation.</p>
+        </div>
+
+        <div class="mt-8 border border-zinc-800 rounded-lg overflow-hidden">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-zinc-900 border-b border-zinc-800 text-zinc-400">
+              <tr>
+                <th scope="col" class="py-3 px-4 font-medium">Subsystem</th>
+                <th scope="col" class="py-3 px-4 font-medium">Supported Target</th>
+                <th scope="col" class="py-3 px-4 font-medium">Driver / Hook Mode</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-850 bg-zinc-950 text-zinc-300">
+              <tr>
+                <td class="py-3 px-4 font-semibold text-zinc-100">Linux Kernel</td>
+                <td class="py-3 px-4">5.8+ (x86_64, aarch64)</td>
+                <td class="py-3 px-4 text-zinc-400">CO-RE enabled (BTF required)</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-semibold text-zinc-100">Container Runtimes</td>
+                <td class="py-3 px-4">containerd, CRI-O, Docker Engine</td>
+                <td class="py-3 px-4 text-zinc-400">CAP_SYS_ADMIN, CAP_BPF granted</td>
+              </tr>
+              <tr>
+                <td class="py-3 px-4 font-semibold text-zinc-100">Export Transport</td>
+                <td class="py-3 px-4">OTel gRPC, Prometheus scrape, Local JSONL</td>
+                <td class="py-3 px-4 text-zinc-400">Non-blocking background ring drain</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Grounded Technical Footer (R-24: Only explicit functioning targets) -->
+  <footer class="bg-zinc-950 py-10 border-t border-zinc-800 text-zinc-400 text-xs font-mono">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 bg-amber-500 rounded-[2px]" aria-hidden="true"></span>
+        <span class="text-zinc-200 font-semibold">ApexProfile Engine</span>
+        <span class="text-zinc-600">|</span>
+        <span>Apache 2.0 Licensed Kernel Modules</span>
+      </div>
+      <div>
+        <span>Telemetry ingest port: <code class="text-zinc-200">localhost:9199/metrics</code></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- State Rendering Script (R-26, R-27, R-32, R-35) -->
+  <script>
+    function copyCollectorCommand() {
+      const input = document.getElementById('cli-install-command');
+      navigator.clipboard.writeText(input.value).then(() => {
+        const status = document.getElementById('copy-status');
+        status.textContent = "Copied to clipboard.";
+        setTimeout(() => {
+          status.textContent = "";
+        }, 3000);
+      }).catch(() => {
+        const status = document.getElementById('copy-status');
+        status.textContent = "Manual copy required: select text in input.";
+      });
+    }
+
+    const states = {
+      active: `
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <span class="text-amber-500 font-semibold">[SLOW QUERY EVENT #8402]</span>
+          <span class="text-zinc-400">Elapsed: 814.2ms</span>
+        </div>
+        <div class="space-y-1 text-zinc-300">
+          <p class="text-zinc-400">// Normalized Query Hash: <span class="text-zinc-200">0xa9f12d88c03</span></p>
+          <p class="text-amber-300">SELECT id, user_id, total, status FROM public.invoices</p>
+          <p class="text-amber-300 pl-4">WHERE status = 'pending_settlement'</p>
+          <p class="text-amber-300 pl-4">ORDER BY inserted_at ASC LIMIT 100 FOR UPDATE;</p>
+        </div>
+        <div class="mt-3 pt-3 border-t border-zinc-800/80 grid grid-cols-2 gap-2 text-zinc-400">
+          <div>Plan: <span class="text-rose-400">Sequential Scan</span></div>
+          <div>Heap Fetches: <span class="text-zinc-200">419,204 blocks</span></div>
+          <div>Client: <span class="text-zinc-200">10.244.3.18:54210</span></div>
+          <div>Index Status: <span class="text-rose-400">MISSING (idx_status_inserted)</span></div>
+        </div>
+      `,
+      loading: `
+        <div class="h-full flex flex-col items-center justify-center py-12 text-zinc-400 space-y-3">
+          <div class="w-5 h-5 border-2 border-zinc-600 border-t-amber-500 rounded-full animate-spin"></div>
+          <p class="text-xs">Polling eBPF ringbuffer on device /sys/kernel/debug/tracing...</p>
+        </div>
+      `,
+      empty: `
+        <div class="h-full flex flex-col items-center justify-center py-12 text-zinc-400 space-y-2 text-center">
+          <span class="text-zinc-600 font-mono text-lg">[NO ACTIVE STALLS]</span>
+          <p class="text-xs max-w-xs text-zinc-400">All database transactions completed within the configured 50ms latency SLA boundary.</p>
+        </div>
+      `
+    };
+
+    function renderState(stateKey) {
+      const container = document.getElementById('inspector-body');
+      container.innerHTML = states[stateKey];
+
+      // Update tab UI buttons
+      const buttons = ['active', 'loading', 'empty'];
+      buttons.forEach(key => {
+        const btn = document.getElementById(`btn-state-${key}`);
+        if (key === stateKey) {
+          btn.className = "px-2 py-0.5 rounded text-[11px] font-mono bg-zinc-800 text-zinc-200";
+          btn.setAttribute('aria-selected', 'true');
+        } else {
+          btn.className = "px-2 py-0.5 rounded text-[11px] font-mono text-zinc-400 hover:text-zinc-200";
+          btn.setAttribute('aria-selected', 'false');
+        }
+      });
+    }
+
+    // Default render
+    renderState('active');
+  </script>
+</body>
+</html>
