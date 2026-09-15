@@ -28,7 +28,7 @@ ApexProfile attaches to Linux socket syscalls (`sys_enter_recvfrom`, `sys_enter_
 | **Export Transport** | OTel gRPC, Prometheus scrape, JSONL | Non-blocking ringbuffer drain |
 
 ---
-
+```
 ## Quickstart
 
 ### 1. Install the collector daemon
